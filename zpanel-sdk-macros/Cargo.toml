@@ -1,0 +1,18 @@
+[package]
+name = "zpanel-sdk-macros"
+version = "0.1.0"
+edition = "2021"
+authors = ["Zpanel Team"]
+description = "zpanel-sdk 的过程宏（#[init], #[start], #[stop], #[request_hook], #[response_hook], #[acl_module]）"
+license = "MIT"
+repository = "https://github.com/hlshell/zpanel-sdk"
+
+[lib]
+name = "zpanel_sdk_macros"
+path = "src/lib.rs"
+proc-macro = true
+
+[dependencies]
+quote = "1.0"
+syn = { version = "2.0", features = ["full", "extra-traits"] }
+proc-macro2 = "1.0"

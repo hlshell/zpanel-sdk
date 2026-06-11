@@ -1,0 +1,36 @@
+[workspace]
+resolver = "2"
+members = [
+    ".",
+    "zpanel-sdk-macros",
+    "examples/example-extension",
+]
+
+[workspace.dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+log = "0.4"
+libloading = "0.8"
+
+[package]
+name = "zpanel-sdk"
+version = "0.1.0"
+edition = "2021"
+authors = ["Zpanel Team"]
+description = "Zpanel DSO 扩展开发 SDK — 为扩展开发者提供类型、宏和 API"
+license = "MIT"
+repository = "https://github.com/hlshell/zpanel-sdk"
+readme = "README.md"
+keywords = ["zpanel", "dso", "extension", "plugin", "web-server"]
+categories = ["development-tools"]
+
+[lib]
+name = "zpanel_sdk"
+path = "src/lib.rs"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+log = { workspace = true }
+libloading = { workspace = true }
+zpanel-sdk-macros = { path = "zpanel-sdk-macros", version = "0.1.0" }

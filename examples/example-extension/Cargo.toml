@@ -1,0 +1,16 @@
+[package]
+name = "zpanel-example-extension"
+version = "0.1.0"
+authors = ["Zpanel Team"]
+description = "示例 DSO 扩展 — 演示如何使用 zpanel-sdk 开发扩展"
+edition = "2021"
+
+[lib]
+name = "zpanel_example_extension"
+crate-type = ["cdylib"]
+
+[dependencies]
+zpanel-sdk = { path = "../..", features = [] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+log = "0.4"
