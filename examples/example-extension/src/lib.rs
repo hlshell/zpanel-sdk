@@ -7,9 +7,9 @@
 //! - 配置读取
 //! - 日志记录
 
-use zpanel_sdk::prelude::*;
-use log::{info, warn, error};
+use log::{error, info, warn};
 use serde::{Deserialize, Serialize};
+use zpanel_sdk::prelude::*;
 
 /// 扩展元数据声明
 zpanel_extension! {

@@ -188,7 +188,10 @@ pub fn acl_module(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let module_name_lit = LitStr::new(&module_name, proc_macro2::Span::call_site());
     // 将 "example_allow_ip" 转为 ident "example_allow_ip"
-    let module_ident = syn::Ident::new(&module_name.replace(|c: char| !c.is_alphanumeric() && c != '_', "_"), proc_macro2::Span::call_site());
+    let module_ident = syn::Ident::new(
+        &module_name.replace(|c: char| !c.is_alphanumeric() && c != '_', "_"),
+        proc_macro2::Span::call_site(),
+    );
     let name_fn_ident = quote::format_ident!("zpanel_acl_name_{}", module_ident);
 
     let expanded = quote! {

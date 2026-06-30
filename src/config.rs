@@ -25,7 +25,8 @@ impl Config {
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Self, ExtensionError> {
         let path = path.as_ref();
         let raw = fs::read_to_string(path)?;
-        let format = path.extension()
+        let format = path
+            .extension()
             .and_then(|e| e.to_str())
             .map(|ext| match ext.to_ascii_lowercase().as_str() {
                 "json" => ConfigFormat::Json,
@@ -44,15 +45,16 @@ impl Config {
         } else {
             ConfigFormat::Toml
         };
-        Config { raw: s.to_string(), format }
+        Config {
+            raw: s.to_string(),
+            format,
+        }
     }
 
     /// 将配置解析为目标类型。
     pub fn parse<T: DeserializeOwned>(&self) -> Result<T, ExtensionError> {
         match self.format {
-            ConfigFormat::Json => {
-                serde_json::from_str(&self.raw).map_err(ExtensionError::from)
-            }
+            ConfigFormat::Json => serde_json::from_str(&self.raw).map_err(ExtensionError::from),
             ConfigFormat::Toml => {
                 // 兼容模式：若 serde_json 也能解析 "key = value" 吗？不能。
                 // 退化为 JSON 简单键值表。
@@ -75,5 +77,7 @@ impl Config {
     }
 
     /// 获取原始配置字符串。
-    pub fn raw(&self) -> &str { &self.raw }
+    pub fn raw(&self) -> &str {
+        &self.raw
+    }
 }

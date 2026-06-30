@@ -29,17 +29,25 @@ impl fmt::Display for ExtensionError {
 impl std::error::Error for ExtensionError {}
 
 impl From<String> for ExtensionError {
-    fn from(s: String) -> Self { ExtensionError::Message(s) }
+    fn from(s: String) -> Self {
+        ExtensionError::Message(s)
+    }
 }
 
 impl From<&str> for ExtensionError {
-    fn from(s: &str) -> Self { ExtensionError::Message(s.to_string()) }
+    fn from(s: &str) -> Self {
+        ExtensionError::Message(s.to_string())
+    }
 }
 
 impl From<std::io::Error> for ExtensionError {
-    fn from(e: std::io::Error) -> Self { ExtensionError::Io(e) }
+    fn from(e: std::io::Error) -> Self {
+        ExtensionError::Io(e)
+    }
 }
 
 impl From<serde_json::Error> for ExtensionError {
-    fn from(e: serde_json::Error) -> Self { ExtensionError::Json(e) }
+    fn from(e: serde_json::Error) -> Self {
+        ExtensionError::Json(e)
+    }
 }

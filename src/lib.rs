@@ -30,7 +30,7 @@ pub mod error;
 pub mod macros;
 pub mod types;
 
-pub use acl::{AclResult, AclModule};
+pub use acl::{AclModule, AclResult};
 pub use config::Config;
 pub use error::ExtensionError;
 pub use types::{
@@ -44,12 +44,12 @@ pub mod prelude {
     //! use zpanel_sdk::prelude::*;
     //! ```
 
-    pub use crate::acl::{AclResult, AclModule};
+    pub use crate::acl::{AclModule, AclResult};
     pub use crate::config::Config;
     pub use crate::error::ExtensionError;
     pub use crate::types::{
         ExtensionInfo, ExtensionMeta, Method, Request, RequestAction, Response, ResponseAction,
     };
-    pub use zpanel_sdk_macros::{acl_module, init, request_hook, response_hook, start, stop};
     pub use crate::zpanel_extension;
+    pub use zpanel_sdk_macros::{acl_module, init, request_hook, response_hook, start, stop};
 }

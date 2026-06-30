@@ -70,19 +70,29 @@ impl Request {
     }
 
     /// 获取 HTTP 方法。
-    pub fn method(&self) -> Method { self.method }
+    pub fn method(&self) -> Method {
+        self.method
+    }
 
     /// 设置 HTTP 方法（仅供 zpanel 内部调用）。
-    pub(crate) fn set_method(&mut self, method: Method) { self.method = method; }
+    pub(crate) fn set_method(&mut self, method: Method) {
+        self.method = method;
+    }
 
     /// 获取请求路径。
-    pub fn path(&self) -> &str { &self.path }
+    pub fn path(&self) -> &str {
+        &self.path
+    }
 
     /// 设置请求路径。
-    pub fn set_path(&mut self, path: &str) { self.path = path.to_string(); }
+    pub fn set_path(&mut self, path: &str) {
+        self.path = path.to_string();
+    }
 
     /// 获取查询参数表的引用。
-    pub fn query(&self) -> &HashMap<String, String> { &self.query }
+    pub fn query(&self) -> &HashMap<String, String> {
+        &self.query
+    }
 
     /// 获取单个请求头。
     pub fn header(&self, name: &str) -> Option<&str> {
@@ -100,10 +110,14 @@ impl Request {
     }
 
     /// 获取客户端 IP。
-    pub fn client_ip(&self) -> &str { &self.client_ip }
+    pub fn client_ip(&self) -> &str {
+        &self.client_ip
+    }
 
     /// 获取请求体。
-    pub fn body(&self) -> &[u8] { &self.body }
+    pub fn body(&self) -> &[u8] {
+        &self.body
+    }
 
     /// 设置速率限制。
     pub fn set_rate_limit(&mut self, requests: u32, window: Duration) {
@@ -112,13 +126,19 @@ impl Request {
     }
 
     /// 仅供 zpanel 内部使用 — 填充请求体。
-    pub(crate) fn set_body(&mut self, body: Vec<u8>) { self.body = body; }
+    pub(crate) fn set_body(&mut self, body: Vec<u8>) {
+        self.body = body;
+    }
 
     /// 仅供 zpanel 内部使用 — 填充查询参数。
-    pub(crate) fn set_query(&mut self, query: HashMap<String, String>) { self.query = query; }
+    pub(crate) fn set_query(&mut self, query: HashMap<String, String>) {
+        self.query = query;
+    }
 
     /// 仅供 zpanel 内部使用 — 填充 client_ip。
-    pub(crate) fn set_client_ip(&mut self, ip: String) { self.client_ip = ip; }
+    pub(crate) fn set_client_ip(&mut self, ip: String) {
+        self.client_ip = ip;
+    }
 }
 
 /// 请求钩子返回的动作。
@@ -152,10 +172,14 @@ impl Response {
     }
 
     /// 获取 HTTP 状态码。
-    pub fn status(&self) -> u16 { self.status }
+    pub fn status(&self) -> u16 {
+        self.status
+    }
 
     /// 设置 HTTP 状态码。
-    pub fn set_status(&mut self, status: u16) { self.status = status; }
+    pub fn set_status(&mut self, status: u16) {
+        self.status = status;
+    }
 
     /// 获取响应头。
     pub fn header(&self, name: &str) -> Option<&str> {
@@ -168,15 +192,23 @@ impl Response {
     }
 
     /// 获取内容类型。
-    pub fn content_type(&self) -> &str { &self.content_type }
+    pub fn content_type(&self) -> &str {
+        &self.content_type
+    }
 
     /// 获取响应体。
-    pub fn body(&self) -> &[u8] { &self.body }
+    pub fn body(&self) -> &[u8] {
+        &self.body
+    }
 
     /// 设置响应体。
-    pub fn set_body(&mut self, body: Vec<u8>) { self.body = body; }
+    pub fn set_body(&mut self, body: Vec<u8>) {
+        self.body = body;
+    }
 
-    pub(crate) fn set_content_type(&mut self, ct: String) { self.content_type = ct; }
+    pub(crate) fn set_content_type(&mut self, ct: String) {
+        self.content_type = ct;
+    }
 }
 
 /// 响应钩子返回的动作。
