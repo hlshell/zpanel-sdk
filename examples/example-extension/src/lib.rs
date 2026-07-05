@@ -6,18 +6,15 @@
 //! - 自定义访问控制
 //! - 配置读取
 //! - 日志记录
+//!
+//! 通过 `zpanel_extension!()` 自动声明扩展元信息，
+//! name / version / author / description 均从 Cargo.toml 读取。
 
 use log::{error, info, warn};
 use serde::{Deserialize, Serialize};
 use zpanel_sdk::prelude::*;
 
-/// 扩展元数据声明。
-///
-/// name / version / author / description 均从 Cargo.toml 自动读取，
-/// 无需在此重复声明。如需覆盖某个字段，显式写出即可。
-zpanel_extension! {
-    dependencies: []
-}
+zpanel_extension!();
 
 /// 扩展配置结构
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -863,6 +863,18 @@ fn example_allow_ip(req: &Request) -> AclResult {
 7. **`static mut` 多线程访问**：当前主程序假设串行调用扩展；如果未来主程序并发调用，`static mut` 会数据竞争。改用 `Mutex`。
 8. **Windows 上调用约定**：必须用 `extern "C"`（即 `cdecl`），不要用 `stdcall`。
 
+### 13.3 为什么不能做到"完全零代码"
+
+常有人问：能不能连 `zpanel_extension!();` 这一行都省了？主程序加载 `.so` 时自动识别就行？
+
+**在 Rust 的稳定版中做不到**，原因有三：
+
+1. **`env!("CARGO_PKG_NAME")` 必须在使用方 crate 的编译上下文中展开**才能拿到使用方的包名。如果 SDK 库里直接定义 `zpanel_extension_get_meta`，拿到的永远是 SDK 自己的名字（`zpanel_sdk`），不是使用方扩展的名字。
+2. **导出符号必须在 crate 源码中明确存在**。Rust 没有"被依赖的库自动往使用方 crate 的符号表里注入符号"的机制（C 也没有——这是链接器的基本行为）。
+3. **crate 级过程宏属性（`#![zpanel_extension]`）目前是 unstable 的**（Rust issue [#54726](https://github.com/rust-lang/rust/issues/54726)），需要 nightly 编译器。等稳定后可以考虑提供这种写法。
+
+因此，**一行 `zpanel_extension!();` 是稳定 Rust 下能做到的最简化**——它本质上是在告诉编译器："请在我的 crate 里生成一个 C 导出函数，名字叫 `zpanel_extension_get_meta`，元信息从我 Cargo.toml 里读。"
+
 ---
 
 ## 附录 A：手写一个不依赖 SDK 的扩展

@@ -12,7 +12,7 @@
 //! | `description`  | `env!("CARGO_PKG_DESCRIPTION")`|
 //! | `dependencies` | `[]`（空数组）                 |
 //!
-//! 最简用法（全部从 Cargo.toml 读取）：
+//! 最简用法（全部从 Cargo.toml 读取，一行搞定）：
 //! ```rust,ignore
 //! zpanel_extension!();
 //! ```
@@ -25,7 +25,7 @@
 //! }
 //! ```
 //!
-//! 全量指定（向后兼容旧写法）：
+//! 全量指定：
 //! ```rust,ignore
 //! zpanel_extension! {
 //!     name: "my_extension",
