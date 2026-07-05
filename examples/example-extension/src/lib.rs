@@ -11,12 +11,11 @@ use log::{error, info, warn};
 use serde::{Deserialize, Serialize};
 use zpanel_sdk::prelude::*;
 
-/// 扩展元数据声明
+/// 扩展元数据声明。
+///
+/// name / version / author / description 均从 Cargo.toml 自动读取，
+/// 无需在此重复声明。如需覆盖某个字段，显式写出即可。
 zpanel_extension! {
-    name: "example_extension",
-    version: "0.1.0",
-    author: "Zpanel Team",
-    description: "Zpanel 示例扩展 - 演示基本功能",
     dependencies: []
 }
 

@@ -249,32 +249,67 @@
 
 源码：[src/macros.rs](../src/macros.rs)
 
-输入：
+#### 多种调用形式
+
+所有字段均为可选，缺省时从 Cargo 编译期环境变量取默认值：
+
+| 字段           | 默认值来源                     |
+|----------------|--------------------------------|
+| `name`         | `env!("CARGO_PKG_NAME")`       |
+| `version`      | `env!("CARGO_PKG_VERSION")`    |
+| `author`       | `env!("CARGO_PKG_AUTHORS")`    |
+| `description`  | `env!("CARGO_PKG_DESCRIPTION")`|
+| `dependencies` | `[]`（空数组）                 |
+
+三种典型写法：
 
 ```rust
+// 最简：全部从 Cargo.toml 读取
+zpanel_extension!();
+
+// 部分覆盖：只写需要改的字段
+zpanel_extension! {
+    description: "自定义描述",
+    dependencies: ["other_ext"],
+}
+
+// 全量指定（向后兼容旧写法）
 zpanel_extension! {
     name: "my_extension",
     version: "0.1.0",
     author: "Alice",
     description: "demo",
-    dependencies: []
+    dependencies: [],
 }
 ```
 
-展开后（简化）：
+#### 实现原理
+
+宏内部使用 **TT-muncher（递归标记咀嚼）** 模式：
+
+1. **入口规则**：接受任意数量、任意顺序的字段，先把所有字段设为默认值。
+2. **覆盖规则**：对每个用户提供的字段，匹配对应的内部规则，把默认值替换为用户值。
+3. **终结规则**：所有字段处理完毕后，生成 `zpanel_extension_get_meta` 导出函数。
+
+字段顺序不影响结果——因为每个字段都有独立的覆盖规则，无论用户按什么顺序写，最终都会落到同一组终结变量上。
+
+#### 展开后的代码
+
+以全量指定为例，展开后（简化）：
 
 ```rust
 #[no_mangle]
 pub extern "C" fn zpanel_extension_get_meta() -> *const u8 {
     static META_JSON: std::sync::OnceLock<String> = std::sync::OnceLock::new();
     let s = META_JSON.get_or_init(|| {
-        let deps: &[&'static str] = &[];
-        format!(
-            "{{\"name\":\"my_extension\",\"version\":\"0.1.0\",\
-             \"author\":\"Alice\",\"description\":\"demo\",\
-             \"dependencies\":{}}}",
-            serde_json::to_string(deps).unwrap_or_else(|_| "[]".to_string())
-        ) + "\0"
+        let meta = serde_json::json!({
+            "name": "my_extension",
+            "version": "0.1.0",
+            "author": "Alice",
+            "description": "demo",
+            "dependencies": [],
+        });
+        meta.to_string() + "\0"
     });
     s.as_ptr()
 }
@@ -284,7 +319,8 @@ pub extern "C" fn zpanel_extension_get_meta() -> *const u8 {
 
 - 用 `OnceLock` 保证字符串只构造一次，且地址稳定。
 - 末尾追加 `\0`，让主程序用 C 字符串方式读取。
-- **当前实现把字段直接 `format!` 进 JSON 字符串，没有做转义**。如果你的 `description` 含有 `"` 或 `\`，会破坏 JSON。详见 §13。
+- JSON 通过 `serde_json::json!` 宏构造，**自动处理转义**（`"`、`\`、换行等都会正确转义）。
+- `env!("CARGO_PKG_...")` 是编译期求值——如果 `Cargo.toml` 里没写 `description` 等字段，编译会报错（`env!` 在变量不存在时 panic）。
 
 ### 5.2 `#[init]` / `#[start]` / `#[stop]`
 
@@ -706,15 +742,11 @@ cp target/release/libmy_extension.so /path/to/zpanel/extend/dso/
 
 ```rust
 zpanel_extension! {
-    name: "example_extension",
-    version: "0.1.0",
-    author: "Zpanel Team",
-    description: "Zpanel 示例扩展 - 演示基本功能",
     dependencies: []
 }
 ```
 
-→ 生成 `zpanel_extension_get_meta` C 函数，返回 JSON 字符串。
+name / version / author / description 自动从 `Cargo.toml` 读取，无需重复声明。展开后生成 `zpanel_extension_get_meta` C 函数，返回 JSON 字符串。详见 §5.1。
 
 ### 11.2 配置结构
 
@@ -786,9 +818,9 @@ fn example_allow_ip(req: &Request) -> AclResult {
 ### 高优先级
 
 - **[planned] 真正的 TOML 支持**：引入 `toml` crate，让 `.conf` 文件按 TOML 解析。当前退化导致示例自带配置都无法解析（§8.2）。
-- **[planned] `get_meta` 字符串转义**：当前 `zpanel_extension!` 用 `format!` 拼 JSON，遇到 `description` 含 `"` 会破坏 JSON。改为先 `serde_json::to_string` 整个对象。
 - **[planned] `RequestAction::Rewrite` 真正传递路径**：当前展开丢弃了路径值。需要重新设计 ABI——可能改为返回 `*const u8` 路径指针 + 状态码组合。
 - **[planned] panic 安全网**：所有钩子宏默认包一层 `catch_unwind`，避免扩展 panic 导致主程序 UB。
+- **[planned] `CARGO_PKG_AUTHORS` 解析为数组**：当前 `author` 字段是冒号分隔的字符串（多作者时）。计划增加 `authors` 字段作为数组，或在宏内部自动 split。
 
 ### 中优先级
 
@@ -811,25 +843,25 @@ fn example_allow_ip(req: &Request) -> AclResult {
 
 ### 13.1 已知限制
 
-1. **`get_meta` 不转义 JSON**：见 §5.1。`description` 含特殊字符会破坏 JSON。
-2. **`.conf` 实际按 JSON 解析**：见 §8.2。仓库自带示例配置在当前实现下走 `Err` 分支。
-3. **`RequestAction::Rewrite` 路径丢失**：见 §5.3。
-4. **`add_header` 与 `set_header` 行为相同**：当前实现都是 `HashMap::insert`，会覆盖同名。若需"同名多值"语义，需要改 `headers` 为 `Vec<(String, String)>`。
-5. **ACL 模块枚举依赖主程序实现**：SDK 不规定主程序如何枚举 `zpanel_acl_name_*` 符号。
-6. **无版本约束**：`dependencies` 只列名，不约束版本。
+1. **`.conf` 实际按 JSON 解析**：见 §8.2。仓库自带示例配置在当前实现下走 `Err` 分支。
+2. **`RequestAction::Rewrite` 路径丢失**：见 §5.3。
+3. **`add_header` 与 `set_header` 行为相同**：当前实现都是 `HashMap::insert`，会覆盖同名。若需"同名多值"语义，需要改 `headers` 为 `Vec<(String, String)>`。
+4. **ACL 模块枚举依赖主程序实现**：SDK 不规定主程序如何枚举 `zpanel_acl_name_*` 符号。
+5. **无版本约束**：`dependencies` 只列名，不约束版本。
+6. **`author` 字段是字符串而非数组**：`CARGO_PKG_AUTHORS` 是冒号分隔的字符串，多作者时不会自动拆成 JSON 数组。
 7. **无热加载**：替换扩展需重启 zpanel。
 8. **无主动调用主程序的能力**：扩展只能被调用。
 
 ### 13.2 常见坑
 
 1. **`crate-type = ["cdylib"]` 忘了写**：编译产物是 `.rlib`，主程序 dlopen 失败。
-2. **函数签名不匹配宏要求**：编译期会报错，但报错信息可能晦涩。务必按 §5 的签名写。
-3. **`#[acl_module]` 的函数名含非法字符**：函数名直接成为 C 符号名，必须是 `[A-Za-z_][A-Za-z0-9_]*`。
-4. **跨调用持有 `&mut Request`**：UB。每个钩子返回后引用即失效。
-5. **在钩子里 panic**：跨 FFI 边界 panic 是 UB。在钩子函数体最外层包 `catch_unwind`，或保证永不 panic。
-6. **`static mut` 多线程访问**：当前主程序假设串行调用扩展；如果未来主程序并发调用，`static mut` 会数据竞争。改用 `Mutex`。
-7. **Windows 上调用约定**：必须用 `extern "C"`（即 `cdecl`），不要用 `stdcall`。
-8. **依赖了 zpanel-sdk 但没在 `Cargo.toml` 里加**：扩展能编译过但运行时找不到符号——`zpanel_extension!` 宏内部用了 `serde_json::to_string`，需要 `serde_json` 在依赖里。
+2. **`Cargo.toml` 里缺字段导致 `env!` 编译失败**：`zpanel_extension!()` 的默认值来自 `env!("CARGO_PKG_NAME")` 等，如果 `Cargo.toml` 里 `[package]` 段缺少 `description` 或 `authors`，编译时会报 `env` variable not found。补上字段或在宏里显式覆盖即可。
+3. **函数签名不匹配宏要求**：编译期会报错，但报错信息可能晦涩。务必按 §5 的签名写。
+4. **`#[acl_module]` 的函数名含非法字符**：函数名直接成为 C 符号名，必须是 `[A-Za-z_][A-Za-z0-9_]*`。
+5. **跨调用持有 `&mut Request`**：UB。每个钩子返回后引用即失效。
+6. **在钩子里 panic**：跨 FFI 边界 panic 是 UB。在钩子函数体最外层包 `catch_unwind`，或保证永不 panic。
+7. **`static mut` 多线程访问**：当前主程序假设串行调用扩展；如果未来主程序并发调用，`static mut` 会数据竞争。改用 `Mutex`。
+8. **Windows 上调用约定**：必须用 `extern "C"`（即 `cdecl`），不要用 `stdcall`。
 
 ---
 
