@@ -5,6 +5,9 @@ authors = ["Zpanel Team"]
 description = "示例 DSO 扩展 — 演示如何使用 zpanel-sdk 开发扩展"
 edition = "2021"
 
+[package.metadata.zpanel_extension]
+dependencies = []
+
 [lib]
 name = "zpanel_example_extension"
 crate-type = ["cdylib"]

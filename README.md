@@ -28,8 +28,8 @@
 
 ## 特性一览
 
-- **声明式扩展定义**：用 `zpanel_extension! { ... }` 一处声明元信息，自动导出 C ABI 符号。
-- **自动从 Cargo.toml 读取元信息**：name / version / author / description 缺省时自动从 `Cargo.toml` 取值，无需重复声明。
+- **声明式扩展定义**：用 `zpanel_extension!()` 一行声明，自动导出 C ABI 符号，元信息从 `Cargo.toml` 读取。
+- **元信息统一由 Cargo.toml 管理**：name / version / author / description 自动从 `[package]` 段读取，`dependencies` 等扩展专属字段放在 `[package.metadata.zpanel_extension]` 段，无需在代码中重复声明。
 - **生命周期钩子**：`#[init]` / `#[start]` / `#[stop]` 覆盖扩展的初始化、启动、停止阶段。
 - **请求 / 响应拦截**：`#[request_hook]` / `#[response_hook]` 直接拿到 `&mut Request` / `&mut Response`，可以读取字段、修改头、改写路径或中止请求。
 - **自定义 ACL 模块**：`#[acl_module(name = "...")]` 让扩展以独立符号方式向主程序注册访问控制规则。
@@ -52,7 +52,13 @@ cd my_extension
 [package]
 name = "my_extension"
 version = "0.1.0"
+authors = ["Your Name"]
+description = "My first zpanel extension"
 edition = "2021"
+
+# 扩展专属元信息（可选，dependencies 等字段放这里）
+[package.metadata.zpanel_extension]
+dependencies = []
 
 [lib]
 name = "my_extension"
@@ -65,6 +71,11 @@ serde = { version = "1", features = ["derive"] }
 log = "0.4"
 ```
 
+> 元信息从 `Cargo.toml` 自动读取：
+> - `name` / `version` / `authors` / `description` → 来自 `[package]` 段
+> - `dependencies` 及其他扩展字段 → 来自 `[package.metadata.zpanel_extension]` 段
+> - 也可以在 `zpanel_extension! { ... }` 里显式写出以覆盖
+
 ### 3. 写代码
 
 在 `src/lib.rs`：
@@ -72,7 +83,7 @@ log = "0.4"
 ```rust
 use zpanel_sdk::prelude::*;
 
-// 最简写法：name / version / author / description 自动从 Cargo.toml 读取
+// 一行搞定：全部元信息自动从 Cargo.toml 读取
 zpanel_extension!();
 
 #[init]
@@ -220,7 +231,7 @@ fn init() -> Result<(), ExtensionError> {
 
 | 宏                              | 标注的函数签名                                                          | 生成的 C ABI 符号                              | 返回值约定                                |
 |--------------------------------|-------------------------------------------------------------------------|------------------------------------------------|-------------------------------------------|
-| `zpanel_extension! { ... }`    | （声明式，不标注函数；所有字段可选，缺省从 Cargo.toml 读取）            | `zpanel_extension_get_meta`                   | 返回指向 JSON 字符串的 `*const u8`（null 结尾）|
+| `zpanel_extension!()`          | （函数式过程宏，不标注函数；元信息从 Cargo.toml 自动读取，可显式覆盖）   | `zpanel_extension_get_meta`                   | 返回指向 JSON 字符串的 `*const u8`（null 结尾）|
 | `#[init]`                      | `fn init() -> Result<(), ExtensionError>`                              | `zpanel_extension_init`                       | `0` 成功，`-1` 失败                        |
 | `#[start]`                    | `fn start() -> Result<(), ExtensionError>`                             | `zpanel_extension_start`                      | `0` 成功，`-1` 失败                        |
 | `#[stop]`                     | `fn stop() -> Result<(), ExtensionError>`                              | `zpanel_extension_stop`                       | `0` 成功，`-1` 失败                        |

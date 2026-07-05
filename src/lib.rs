@@ -2,18 +2,12 @@
 //!
 //! 为 [hlshell/zpanel](https://github.com/hlshell/zpanel) 的扩展开发者提供类型、宏和 API。
 //!
-//! 典型用法：
+//! 典型用法（元信息全部从 Cargo.toml 读取）：
 //!
 //! ```rust,ignore
 //! use zpanel_sdk::prelude::*;
 //!
-//! zpanel_extension! {
-//!     name: "my_extension",
-//!     version: "0.1.0",
-//!     author: "Your Name",
-//!     description: "My first zpanel extension",
-//!     dependencies: []
-//! }
+//! zpanel_extension!();
 //!
 //! #[init]
 //! fn init() -> Result<(), ExtensionError> { Ok(()) }
@@ -27,7 +21,6 @@
 pub mod acl;
 pub mod config;
 pub mod error;
-pub mod macros;
 pub mod types;
 
 pub use acl::{AclModule, AclResult};
@@ -36,6 +29,7 @@ pub use error::ExtensionError;
 pub use types::{
     ExtensionInfo, ExtensionMeta, Method, Request, RequestAction, Response, ResponseAction,
 };
+pub use zpanel_sdk_macros::zpanel_extension;
 
 pub mod prelude {
     //! 常用类型与宏的便捷导入。

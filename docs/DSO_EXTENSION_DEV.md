@@ -247,27 +247,24 @@
 
 ### 5.1 `zpanel_extension!`
 
-源码：[src/macros.rs](../src/macros.rs)
+源码：[zpanel-sdk-macros/src/lib.rs](../zpanel-sdk-macros/src/lib.rs)（函数式过程宏）
+
+这是一个 **function-like proc macro**（函数式过程宏），在编译期读取当前 crate 的 `Cargo.toml`，解析元信息并生成 `zpanel_extension_get_meta` C 导出函数。
+
+#### 元信息优先级（从高到低）
+
+1. 宏调用时显式指定的字段（`zpanel_extension! { name: "..." }`）
+2. `Cargo.toml` 的 `[package.metadata.zpanel_extension]` 段
+3. `Cargo.toml` 的 `[package]` 段基本信息（name / version / authors / description）
+4. 兜底：`name = "unknown"`、`version = "0.0.0"`、其余为空
 
 #### 多种调用形式
 
-所有字段均为可选，缺省时从 Cargo 编译期环境变量取默认值：
-
-| 字段           | 默认值来源                     |
-|----------------|--------------------------------|
-| `name`         | `env!("CARGO_PKG_NAME")`       |
-| `version`      | `env!("CARGO_PKG_VERSION")`    |
-| `author`       | `env!("CARGO_PKG_AUTHORS")`    |
-| `description`  | `env!("CARGO_PKG_DESCRIPTION")`|
-| `dependencies` | `[]`（空数组）                 |
-
-三种典型写法：
-
 ```rust
-// 最简：全部从 Cargo.toml 读取
+// 最简：全部从 Cargo.toml 读取（推荐）
 zpanel_extension!();
 
-// 部分覆盖：只写需要改的字段
+// 部分覆盖：显式字段会覆盖 Cargo.toml 中的值
 zpanel_extension! {
     description: "自定义描述",
     dependencies: ["other_ext"],
@@ -283,19 +280,28 @@ zpanel_extension! {
 }
 ```
 
+#### Cargo.toml 中的配置
+
+```toml
+[package]
+name = "my_extension"          # → name
+version = "0.1.0"              # → version
+authors = ["Alice", "Bob"]     # → author（自动 join 为 "Alice, Bob"）
+description = "..."            # → description
+
+[package.metadata.zpanel_extension]
+dependencies = ["other_ext"]   # → dependencies
+# name / version / author / description 也可以写在这里，会覆盖 [package] 中的值
+```
+
 #### 实现原理
 
-宏内部使用 **TT-muncher（递归标记咀嚼）** 模式：
+1. **读取 `Cargo.toml`**：通过 `CARGO_MANIFEST_DIR` 环境变量定位文件，用 `toml` crate 解析。
+2. **解析宏输入**：遍历 token 树，提取用户显式指定的字段。
+3. **合并**：按优先级（显式 > metadata > package）合并所有字段。
+4. **生成代码**：输出 `#[no_mangle] pub extern "C" fn zpanel_extension_get_meta()`，内部用 `OnceLock` 缓存 JSON 字符串。
 
-1. **入口规则**：接受任意数量、任意顺序的字段，先把所有字段设为默认值。
-2. **覆盖规则**：对每个用户提供的字段，匹配对应的内部规则，把默认值替换为用户值。
-3. **终结规则**：所有字段处理完毕后，生成 `zpanel_extension_get_meta` 导出函数。
-
-字段顺序不影响结果——因为每个字段都有独立的覆盖规则，无论用户按什么顺序写，最终都会落到同一组终结变量上。
-
-#### 展开后的代码
-
-以全量指定为例，展开后（简化）：
+#### 展开后的代码（简化）
 
 ```rust
 #[no_mangle]
@@ -320,7 +326,7 @@ pub extern "C" fn zpanel_extension_get_meta() -> *const u8 {
 - 用 `OnceLock` 保证字符串只构造一次，且地址稳定。
 - 末尾追加 `\0`，让主程序用 C 字符串方式读取。
 - JSON 通过 `serde_json::json!` 宏构造，**自动处理转义**（`"`、`\`、换行等都会正确转义）。
-- `env!("CARGO_PKG_...")` 是编译期求值——如果 `Cargo.toml` 里没写 `description` 等字段，编译会报错（`env!` 在变量不存在时 panic）。
+- 所有值在**编译期**就确定了——`OnceLock` 里的字符串字面量是编译期拼好的常量，运行时只是第一次调用时拷贝到堆上。
 
 ### 5.2 `#[init]` / `#[start]` / `#[stop]`
 
@@ -741,12 +747,14 @@ cp target/release/libmy_extension.so /path/to/zpanel/extend/dso/
 ### 11.1 元信息声明
 
 ```rust
-zpanel_extension! {
-    dependencies: []
-}
+zpanel_extension!();
 ```
 
-name / version / author / description 自动从 `Cargo.toml` 读取，无需重复声明。展开后生成 `zpanel_extension_get_meta` C 函数，返回 JSON 字符串。详见 §5.1。
+全部元信息从 `Cargo.toml` 自动读取：
+- `name` / `version` / `author` / `description` ← `[package]` 段
+- `dependencies` ← `[package.metadata.zpanel_extension]` 段
+
+展开后生成 `zpanel_extension_get_meta` C 函数，返回 JSON 字符串。详见 §5.1。
 
 ### 11.2 配置结构
 
@@ -820,7 +828,7 @@ fn example_allow_ip(req: &Request) -> AclResult {
 - **[planned] 真正的 TOML 支持**：引入 `toml` crate，让 `.conf` 文件按 TOML 解析。当前退化导致示例自带配置都无法解析（§8.2）。
 - **[planned] `RequestAction::Rewrite` 真正传递路径**：当前展开丢弃了路径值。需要重新设计 ABI——可能改为返回 `*const u8` 路径指针 + 状态码组合。
 - **[planned] panic 安全网**：所有钩子宏默认包一层 `catch_unwind`，避免扩展 panic 导致主程序 UB。
-- **[planned] `CARGO_PKG_AUTHORS` 解析为数组**：当前 `author` 字段是冒号分隔的字符串（多作者时）。计划增加 `authors` 字段作为数组，或在宏内部自动 split。
+- **[planned] `author` 字段支持数组**：当前 `author` 始终输出为字符串（多作者用逗号连接）。计划增加 `authors` 字段作为 JSON 数组输出。
 
 ### 中优先级
 
@@ -855,7 +863,7 @@ fn example_allow_ip(req: &Request) -> AclResult {
 ### 13.2 常见坑
 
 1. **`crate-type = ["cdylib"]` 忘了写**：编译产物是 `.rlib`，主程序 dlopen 失败。
-2. **`Cargo.toml` 里缺字段导致 `env!` 编译失败**：`zpanel_extension!()` 的默认值来自 `env!("CARGO_PKG_NAME")` 等，如果 `Cargo.toml` 里 `[package]` 段缺少 `description` 或 `authors`，编译时会报 `env` variable not found。补上字段或在宏里显式覆盖即可。
+2. **修改 `Cargo.toml` 后没重新编译**：`zpanel_extension!` 在编译期读取 `Cargo.toml`，改完配置后需要 `cargo build` 才会生效。
 3. **函数签名不匹配宏要求**：编译期会报错，但报错信息可能晦涩。务必按 §5 的签名写。
 4. **`#[acl_module]` 的函数名含非法字符**：函数名直接成为 C 符号名，必须是 `[A-Za-z_][A-Za-z0-9_]*`。
 5. **跨调用持有 `&mut Request`**：UB。每个钩子返回后引用即失效。
@@ -867,13 +875,14 @@ fn example_allow_ip(req: &Request) -> AclResult {
 
 常有人问：能不能连 `zpanel_extension!();` 这一行都省了？主程序加载 `.so` 时自动识别就行？
 
-**在 Rust 的稳定版中做不到**，原因有三：
+**在 Rust 的稳定版中做不到**，原因有二：
 
-1. **`env!("CARGO_PKG_NAME")` 必须在使用方 crate 的编译上下文中展开**才能拿到使用方的包名。如果 SDK 库里直接定义 `zpanel_extension_get_meta`，拿到的永远是 SDK 自己的名字（`zpanel_sdk`），不是使用方扩展的名字。
+1. **`CARGO_MANIFEST_DIR` 必须在使用方 crate 的编译上下文中展开**才能拿到使用方的 Cargo.toml 路径。如果 SDK 库里直接定义 `zpanel_extension_get_meta`，拿到的永远是 SDK 自己的 Cargo.toml，不是使用方扩展的。
 2. **导出符号必须在 crate 源码中明确存在**。Rust 没有"被依赖的库自动往使用方 crate 的符号表里注入符号"的机制（C 也没有——这是链接器的基本行为）。
-3. **crate 级过程宏属性（`#![zpanel_extension]`）目前是 unstable 的**（Rust issue [#54726](https://github.com/rust-lang/rust/issues/54726)），需要 nightly 编译器。等稳定后可以考虑提供这种写法。
 
 因此，**一行 `zpanel_extension!();` 是稳定 Rust 下能做到的最简化**——它本质上是在告诉编译器："请在我的 crate 里生成一个 C 导出函数，名字叫 `zpanel_extension_get_meta`，元信息从我 Cargo.toml 里读。"
+
+> 注：`#![zpanel_extension]` 形式的 crate 级属性宏理论上更简洁，但它目前是 unstable 的（Rust issue [#54726](https://github.com/rust-lang/rust/issues/54726)），需要 nightly 编译器。等稳定后可以考虑提供这种写法。
 
 ---
 
