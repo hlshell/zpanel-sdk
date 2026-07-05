@@ -240,6 +240,7 @@ pub fn acl_module(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// description = "My first zpanel extension"
 ///
 /// [package.metadata.zpanel_extension]
+/// api_id = "my_ext_001"
 /// dependencies = ["other_ext"]
 /// ```
 ///
@@ -248,6 +249,7 @@ pub fn acl_module(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// ```rust,ignore
 /// zpanel_extension! {
 ///     description: "自定义描述",
+///     api_id: "my_ext_001",
 ///     dependencies: ["other_ext"],
 /// }
 /// ```
@@ -260,6 +262,7 @@ pub fn acl_module(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///     version: "0.1.0",
 ///     author: "Your Name",
 ///     description: "...",
+///     api_id: "my_ext_001",
 ///     dependencies: [],
 /// }
 /// ```
@@ -292,11 +295,15 @@ pub fn zpanel_extension(input: TokenStream) -> TokenStream {
         .dependencies
         .or(cargo_defaults.dependencies)
         .unwrap_or_default();
+    let api_id = explicit
+        .api_id
+        .or(cargo_defaults.api_id);
 
     let name_lit = LitStr::new(&name, proc_macro2::Span::call_site());
     let version_lit = LitStr::new(&version, proc_macro2::Span::call_site());
     let author_lit = LitStr::new(&author, proc_macro2::Span::call_site());
     let description_lit = LitStr::new(&description, proc_macro2::Span::call_site());
+    let api_id_lit = api_id.as_deref().map(|s| LitStr::new(s, proc_macro2::Span::call_site()));
     let dep_lits: Vec<proc_macro2::TokenStream> = dependencies
         .iter()
         .map(|d| {
@@ -304,6 +311,13 @@ pub fn zpanel_extension(input: TokenStream) -> TokenStream {
             quote! { #lit }
         })
         .collect();
+
+    // api_id 可选：有值时写入 JSON，无值时省略该字段
+    let api_id_kv = if let Some(ref lit) = api_id_lit {
+        quote! { "api_id": #lit, }
+    } else {
+        quote! {}
+    };
 
     let expanded = quote! {
         #[no_mangle]
@@ -316,6 +330,7 @@ pub fn zpanel_extension(input: TokenStream) -> TokenStream {
                     "version": #version_lit,
                     "author": #author_lit,
                     "description": #description_lit,
+                    #api_id_kv
                     "dependencies": [#(#dep_lits),*],
                 });
                 meta.to_string() + "\0"
@@ -335,6 +350,7 @@ struct MetaFields {
     version: Option<String>,
     author: Option<String>,
     description: Option<String>,
+    api_id: Option<String>,
     dependencies: Option<Vec<String>>,
 }
 
@@ -357,6 +373,7 @@ fn parse_explicit_fields(input: proc_macro2::TokenStream) -> MetaFields {
                             "version" => fields.version = val.into_str(),
                             "author" => fields.author = val.into_str(),
                             "description" => fields.description = val.into_str(),
+                            "api_id" => fields.api_id = val.into_str(),
                             "dependencies" => fields.dependencies = val.into_arr(),
                             _ => {}
                         }
@@ -511,6 +528,9 @@ fn read_cargo_metadata() -> MetaFields {
                 .filter_map(|v| v.as_str().map(|s| s.to_string()))
                 .collect();
             fields.dependencies = Some(deps);
+        }
+        if let Some(api_id) = meta.get("api_id").and_then(|v| v.as_str()) {
+            fields.api_id = Some(api_id.to_string());
         }
     }
 

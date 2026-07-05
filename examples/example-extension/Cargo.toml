@@ -6,6 +6,7 @@ description = "示例 DSO 扩展 — 演示如何使用 zpanel-sdk 开发扩展"
 edition = "2021"
 
 [package.metadata.zpanel_extension]
+api_id = "example_extension_001"
 dependencies = []
 
 [lib]

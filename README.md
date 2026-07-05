@@ -56,8 +56,9 @@ authors = ["Your Name"]
 description = "My first zpanel extension"
 edition = "2021"
 
-# 扩展专属元信息（可选，dependencies 等字段放这里）
+# 扩展专属元信息（可选，api_id / dependencies 等字段放这里）
 [package.metadata.zpanel_extension]
+api_id = "my_ext_001"
 dependencies = []
 
 [lib]
@@ -73,7 +74,7 @@ log = "0.4"
 
 > 元信息从 `Cargo.toml` 自动读取：
 > - `name` / `version` / `authors` / `description` → 来自 `[package]` 段
-> - `dependencies` 及其他扩展字段 → 来自 `[package.metadata.zpanel_extension]` 段
+> - `api_id` / `dependencies` 及其他扩展字段 → 来自 `[package.metadata.zpanel_extension]` 段
 > - 也可以在 `zpanel_extension! { ... }` 里显式写出以覆盖
 
 ### 3. 写代码

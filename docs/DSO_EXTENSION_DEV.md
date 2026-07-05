@@ -290,9 +290,19 @@ authors = ["Alice", "Bob"]     # → author（自动 join 为 "Alice, Bob"）
 description = "..."            # → description
 
 [package.metadata.zpanel_extension]
+api_id = "my_ext_001"          # → api_id（扩展开发者 API 标识，主程序用于鉴权 / 路由）
 dependencies = ["other_ext"]   # → dependencies
 # name / version / author / description 也可以写在这里，会覆盖 [package] 中的值
 ```
+
+| 字段           | 来源                                          | 是否必填 |
+|----------------|-----------------------------------------------|----------|
+| `name`         | `[package].name` 或 `[metadata...].name`      | 推荐     |
+| `version`      | `[package].version` 或 `[metadata...].version`| 推荐     |
+| `author`       | `[package].authors` 或 `[metadata...].author`  | 可选     |
+| `description`  | `[package].description` 或 `[metadata...]`     | 可选     |
+| `api_id`       | `[metadata...].api_id`                        | 推荐     |
+| `dependencies` | `[metadata...].dependencies`                  | 可选，默认 `[]` |
 
 #### 实现原理
 
@@ -313,6 +323,7 @@ pub extern "C" fn zpanel_extension_get_meta() -> *const u8 {
             "version": "0.1.0",
             "author": "Alice",
             "description": "demo",
+            "api_id": "my_ext_001",
             "dependencies": [],
         });
         meta.to_string() + "\0"
@@ -326,6 +337,7 @@ pub extern "C" fn zpanel_extension_get_meta() -> *const u8 {
 - 用 `OnceLock` 保证字符串只构造一次，且地址稳定。
 - 末尾追加 `\0`，让主程序用 C 字符串方式读取。
 - JSON 通过 `serde_json::json!` 宏构造，**自动处理转义**（`"`、`\`、换行等都会正确转义）。
+- `api_id` 为可选字段——未配置时 JSON 中不包含该键。
 - 所有值在**编译期**就确定了——`OnceLock` 里的字符串字面量是编译期拼好的常量，运行时只是第一次调用时拷贝到堆上。
 
 ### 5.2 `#[init]` / `#[start]` / `#[stop]`
