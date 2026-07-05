@@ -4,6 +4,7 @@ members = [
     ".",
     "zpanel-sdk-macros",
     "examples/example-extension",
+    "examples/minimal-handwritten",
 ]
 
 [workspace.dependencies]

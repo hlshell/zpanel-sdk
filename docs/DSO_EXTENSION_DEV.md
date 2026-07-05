@@ -900,47 +900,123 @@ fn example_allow_ip(req: &Request) -> AclResult {
 
 ## 附录 A：手写一个不依赖 SDK 的扩展
 
-理解 ABI 后，你可以完全不用 SDK 手写一个最小扩展。下面是等价于 `zpanel_extension! { name: "hello", ... }` + `#[init]` 的手写版本：
+### A.1 两个能力层：识别层 vs 功能层
+
+理解 DSO 扩展的 ABI 后，可以发现它实际上分两个独立的能力层：
+
+| 能力层 | 做什么 | 是否需要 SDK |
+|--------|--------|--------------|
+| **识别层** | 导出 `zpanel_extension_get_meta` 返回 JSON，让主程序能 dlopen 后识别扩展身份（name / version / api_id / dependencies） | **❌ 不需要**。纯 C ABI，手写导出函数即可 |
+| **功能层** | 实现 `init` / `on_request` / `on_response` 等钩子，操作 `Request` / `Response` 字段 | **✅ 推荐用 SDK**。手写需自行复刻类型内存布局 |
+
+**关键结论：如果只想让主程序"识别"DSO（读元信息、做依赖排序、记录 api_id），完全可以零 SDK 依赖手写。**
+
+### A.2 最小手写扩展（零 SDK 依赖）
+
+参见 [examples/minimal-handwritten](../examples/minimal-handwritten)。完整 `Cargo.toml`：
+
+```toml
+[package]
+name = "minimal-handwritten"
+version = "0.1.0"
+authors = ["Demo"]
+description = "零 SDK 依赖的手写扩展"
+edition = "2021"
+
+[package.metadata.zpanel_extension]
+api_id = "minimal_handwritten_001"
+
+[lib]
+name = "minimal_handwritten"
+crate-type = ["cdylib"]
+
+# 注意：[dependencies] 为空，不依赖 zpanel-sdk
+```
+
+完整 `src/lib.rs`：
 
 ```rust
-// Cargo.toml:
-// [lib]
-// crate-type = ["cdylib"]
-
 use std::ffi::CString;
 use std::sync::OnceLock;
 
 static META: OnceLock<CString> = OnceLock::new();
 
+/// 返回扩展元信息（JSON 字符串，以 null 结尾）。
 #[no_mangle]
 pub extern "C" fn zpanel_extension_get_meta() -> *const u8 {
     let s = META.get_or_init(|| {
         CString::new(
-            r#"{"name":"hello","version":"0.1.0","author":"hand","description":"handwritten","dependencies":[]}"#
+            r#"{"name":"minimal-handwritten","version":"0.1.0","author":"Demo","description":"零 SDK 依赖","api_id":"minimal_handwritten_001","dependencies":[]}"#
         ).unwrap()
     });
-    s.as_ptr()
+    s.as_ptr() as *const u8
 }
 
 #[no_mangle]
-pub extern "C" fn zpanel_extension_init() -> i32 {
-    // 自己写初始化逻辑，返回 0 表示成功
-    0
-}
+pub extern "C" fn zpanel_extension_init() -> i32 { 0 }
 
 #[no_mangle]
-pub extern "C" fn zpanel_extension_on_request(
-    _req_ptr: *mut std::ffi::c_void, // 你需要自己定义 Request 的内存布局
-) -> i32 {
-    0 // Continue
+pub extern "C" fn zpanel_extension_start() -> i32 { 0 }
+
+#[no_mangle]
+pub extern "C" fn zpanel_extension_stop() -> i32 { 0 }
+
+/// 请求钩子：入参是不透明指针，手写扩展要操作需自行复刻 Request 布局。
+#[no_mangle]
+pub extern "C" fn zpanel_extension_on_request(_req_ptr: *mut u8) -> i32 { 0 }
+
+#[no_mangle]
+pub extern "C" fn zpanel_extension_on_response(_resp_ptr: *mut u8) -> i32 { 0 }
+```
+
+### A.3 实测验证
+
+主程序（用 Python + ctypes 模拟）加载手写扩展并读取元信息：
+
+```python
+import ctypes, json
+lib = ctypes.CDLL('libminimal_handwritten.so')
+lib.zpanel_extension_get_meta.restype = ctypes.c_char_p
+p = lib.zpanel_extension_get_meta()
+print(json.dumps(json.loads(p.decode()), indent=2))
+```
+
+输出：
+
+```json
+{
+  "name": "minimal-handwritten",
+  "version": "0.1.0",
+  "author": "Demo",
+  "description": "零 SDK 依赖",
+  "api_id": "minimal_handwritten_001",
+  "dependencies": []
 }
 ```
 
-注意：
+`nm -D libminimal_handwritten.so | grep zpanel_sdk` 检查无任何 SDK 符号依赖。
 
-- `Request` / `Response` 的内存布局当前**没有以 C 头文件形式稳定下来**——它依赖 Rust 的 `HashMap` / `String` / `Vec` 内部布局。这是 SDK 存在的最大理由之一：让 SDK 升级时类型布局变更由 SDK 版本号声明。
+### A.4 手写 vs SDK 的取舍
+
+| 维度 | 手写（零 SDK） | 用 SDK |
+|------|----------------|--------|
+| 主程序识别 | ✅ 完全支持 | ✅ 完全支持 |
+| Cargo.toml 自动读取元信息 | ❌ 需手写 JSON 字符串 | ✅ `zpanel_extension!()` 自动读取 |
+| JSON 转义安全 | ❌ 需自己处理 `"` / `\` | ✅ `serde_json` 自动转义 |
+| 操作 Request / Response | ❌ 需自行复刻内存布局 | ✅ `#[request_hook]` 直接拿到 `&mut Request` |
+| 类型升级跟随主程序 | ❌ 字段变更需手动同步 | ✅ 升级 SDK 版本即可 |
+| 编译产物大小 | 更小（无 SDK 链入） | 略大 |
+
+**推荐做法**：
+
+- **如果只发布"声明型扩展"**（只让主程序识别身份，不真正拦截请求）→ 手写即可
+- **如果要拦截请求 / 响应 / ACL** → 用 SDK，避免手写 FFI 布局出错
+
+### A.5 注意事项
+
+- `Request` / `Response` 的内存布局当前**没有以 C 头文件形式稳定下来**——它依赖 Rust 的 `String` / `Vec` / `HashMap` 内部布局。手写扩展要操作这些指针属于 UB。
 - 如果你要用 C / C++ 写扩展，需要等 SDK 提供稳定的 C 头文件（计划中，见 §12）。
-- **目前不推荐**绕过 SDK 手写。这里的示例只是说明 ABI 是开放的。
+- 手写 JSON 时务必转义 `"`、`\`、换行——推荐至少用 `serde_json::json!` 宏。
 
 ---
 

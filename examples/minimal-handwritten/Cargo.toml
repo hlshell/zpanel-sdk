@@ -1,0 +1,16 @@
+[package]
+name = "minimal-handwritten"
+version = "0.1.0"
+authors = ["Demo"]
+description = "零 SDK 依赖的手写扩展 — 证明主程序识别 DSO 不需要 zpanel-sdk"
+edition = "2021"
+
+[package.metadata.zpanel_extension]
+api_id = "minimal_handwritten_001"
+
+[lib]
+name = "minimal_handwritten"
+crate-type = ["cdylib"]
+
+# 注意：本 crate 不依赖 zpanel-sdk
+[dependencies]
